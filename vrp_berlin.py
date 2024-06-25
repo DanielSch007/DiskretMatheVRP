@@ -3,6 +3,7 @@ import geopandas as gpd
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 from ortools.constraint_solver import pywrapcp, routing_enums_pb2
+import contextily as ctx
 
 # Define the depot and customer locations
 depot = (13.3694, 52.5259)  # Berlin Central Station coordinates
@@ -96,17 +97,15 @@ def main():
 
 def visualize_solution(data, manager, routing, solution):
     fig, ax = plt.subplots(figsize=(10, 10))
-    berlin_shapefile_path = "ne_110m_admin_0_boundary_lines_land.shp"
-    berlin_shapefile = gpd.read_file(berlin_shapefile_path)
-    berlin_shapefile.plot(ax=ax, color='lightgrey')
     ax.set_title('Vehicle Routing Problem Solution in Berlin')
 
+    # Plot depot and customers
     ax.plot(depot[0], depot[1], 'rs', markersize=10, label='Depot')
-
     for i, customer in enumerate(customers):
         ax.plot(customer[0], customer[1], 'bo', markersize=5)
         ax.text(customer[0], customer[1], f' {i+1}', fontsize=12)
 
+    # Plot routes
     colors = ['r', 'g', 'b', 'y', 'c', 'm']
     for vehicle_id in range(num_vehicles):
         index = routing.Start(vehicle_id)
@@ -120,6 +119,16 @@ def visualize_solution(data, manager, routing, solution):
                 y_values = [data['locations'][from_node][1], data['locations'][to_node][1]]
                 line = mlines.Line2D(x_values, y_values, color=colors[vehicle_id], linestyle='-', linewidth=2)
                 ax.add_line(line)
+
+    # Set x and y axis limits to zoom in on Berlin
+    ax.set_xlim([13.2, 13.6])
+    ax.set_ylim([52.4, 52.6])
+
+    # Add basemap
+    berlin_df = gpd.GeoDataFrame(geometry=gpd.points_from_xy([x[0] for x in data['locations']], [x[1] for x in data['locations']]))
+    berlin_df = berlin_df.set_crs(epsg=4326)
+    berlin_df = berlin_df.to_crs(epsg=3857)
+    ctx.add_basemap(ax, source=ctx.providers.Stamen.TonerLite, crs=berlin_df.crs.to_string())
 
     ax.legend()
     plt.show()
