@@ -2,6 +2,8 @@ import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 import geopandas as gpd
 import contextily as ctx
+from ortools.constraint_solver import pywrapcp
+from ortools.constraint_solver import routing_enums_pb2
 
 # Coordinates and names for the Ritz Carlton Hotel in Berlin and sightseeing attractions
 depot = (13.3767, 52.5096)
@@ -9,15 +11,15 @@ depot_name = "Ritz Carlton Hotel"
 
 sightseeing_attractions = [
     (13.3777, 52.5163, 'Brandenburg Gate'),
+    (13.3752, 52.5096, 'Potsdamer Platz'),
     (13.3830, 52.5186, 'Reichstag Building'),
     (13.3916, 52.5325, 'Berlin Wall Memorial'),
     (13.3976, 52.5319, 'Museum Island'),
+    (13.2837, 52.5186, 'Charlottenburg Palace'),
     (13.4009, 52.5192, 'Berlin Cathedral'),
     (13.3904, 52.5076, 'Checkpoint Charlie'),
     (13.4390, 52.5027, 'East Side Gallery'),
     (13.4132, 52.5219, 'Alexanderplatz'),
-    (13.3752, 52.5096, 'Potsdamer Platz'),
-    (13.2837, 52.5186, 'Charlottenburg Palace')
 ]
 
 # Number of vehicles
@@ -40,21 +42,21 @@ def visualize_tourist_route(data, manager, routing, solution):
     ax.plot(depot[0], depot[1], 'rs', markersize=10, label=depot_name)
 
     # Plot sightseeing attractions
-    for i, (x, y, name) in enumerate(sightseeing_attractions, start=1):  # start=1 to start indexing from 1
+    for i, (x, y, name) in enumerate(sightseeing_attractions, start=1):
         ax.plot(x, y, 'go', markersize=5, label=f'S{i}: {name}')
         ax.text(x, y, f'S{i}', fontsize=12, ha='right')
 
     # Plot route
     colors = ['b']
-    visit_orders = [[] for _ in range(num_vehicles)]  # List to store visit order for each vehicle
+    visit_orders = [[] for _ in range(num_vehicles)]
 
     for vehicle_id in range(num_vehicles):
         index = routing.Start(vehicle_id)
         while not routing.IsEnd(index):
             from_node = manager.IndexToNode(index)
-            visit_orders[vehicle_id].append(from_node)  # Record the visit order
+            visit_orders[vehicle_id].append(from_node)
             index = solution.Value(routing.NextVar(index))
-        visit_orders[vehicle_id].append(manager.IndexToNode(index))  # Add the last node (depot)
+        visit_orders[vehicle_id].append(manager.IndexToNode(index))
 
         index = routing.Start(vehicle_id)
         while not routing.IsEnd(index):
@@ -78,29 +80,21 @@ def visualize_tourist_route(data, manager, routing, solution):
     berlin_df = berlin_df.to_crs(epsg=3857)
     ctx.add_basemap(ax, source=ctx.providers.OpenStreetMap.Mapnik, crs=berlin_df.crs.to_string(), zoom=12)
 
-    # Create legend for sightseeing locations
-    handles, labels = ax.get_legend_handles_labels()
-    sightseeing_legend = ax.legend(handles, labels, loc='upper right', title='Sightseeing Locations')
 
-    # Create legend for visit order (change 'Vehicle' to 'Tourist')
+    # Create legend for visit order
     visit_legend = []
     for i in range(num_vehicles):
-        visit_order_str = ', '.join([f'S{node}' for node in visit_orders[i]])
+        visit_order_str = ', '.join([f'S{node}' if node > 0 else '' for node in visit_orders[i]])
         visit_legend.append(mlines.Line2D([], [], color='white', marker='o', markersize=10, label=f'Tourist {i+1}: {visit_order_str}'))
     
     ax.legend(handles=visit_legend, loc='lower right', title='Visit Order', fontsize='small')
 
-    # Add the sightseeing legend back to the figure
-    ax.add_artist(sightseeing_legend)
+
 
     plt.show()
 
-
 # Dummy main function to call the visualizer
 def main():
-    from ortools.constraint_solver import pywrapcp
-    from ortools.constraint_solver import routing_enums_pb2
-
     manager = pywrapcp.RoutingIndexManager(len(data['locations']), data['num_vehicles'], data['depot'])
     routing = pywrapcp.RoutingModel(manager)
 
