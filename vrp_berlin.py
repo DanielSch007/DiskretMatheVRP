@@ -40,13 +40,22 @@ def visualize_tourist_route(data, manager, routing, solution):
     ax.plot(depot[0], depot[1], 'rs', markersize=10, label=depot_name)
 
     # Plot sightseeing attractions
-    for i, (x, y, name) in enumerate(sightseeing_attractions):
-        ax.plot(x, y, 'go', markersize=5, label=f'S{i+1}: {name}')
-        ax.text(x, y, f'S{i+1}', fontsize=12, ha='right')
+    for i, (x, y, name) in enumerate(sightseeing_attractions, start=1):  # start=1 to start indexing from 1
+        ax.plot(x, y, 'go', markersize=5, label=f'S{i}: {name}')
+        ax.text(x, y, f'S{i}', fontsize=12, ha='right')
 
     # Plot route
     colors = ['b']
+    visit_orders = [[] for _ in range(num_vehicles)]  # List to store visit order for each vehicle
+
     for vehicle_id in range(num_vehicles):
+        index = routing.Start(vehicle_id)
+        while not routing.IsEnd(index):
+            from_node = manager.IndexToNode(index)
+            visit_orders[vehicle_id].append(from_node)  # Record the visit order
+            index = solution.Value(routing.NextVar(index))
+        visit_orders[vehicle_id].append(manager.IndexToNode(index))  # Add the last node (depot)
+
         index = routing.Start(vehicle_id)
         while not routing.IsEnd(index):
             from_node = manager.IndexToNode(index)
@@ -69,11 +78,23 @@ def visualize_tourist_route(data, manager, routing, solution):
     berlin_df = berlin_df.to_crs(epsg=3857)
     ctx.add_basemap(ax, source=ctx.providers.OpenStreetMap.Mapnik, crs=berlin_df.crs.to_string(), zoom=12)
 
-    # Create legend
+    # Create legend for sightseeing locations
     handles, labels = ax.get_legend_handles_labels()
-    legend = ax.legend(handles, labels, loc='upper right', title='Sightseeing Locations')
+    sightseeing_legend = ax.legend(handles, labels, loc='upper right', title='Sightseeing Locations')
+
+    # Create legend for visit order (change 'Vehicle' to 'Tourist')
+    visit_legend = []
+    for i in range(num_vehicles):
+        visit_order_str = ', '.join([f'S{node}' for node in visit_orders[i]])
+        visit_legend.append(mlines.Line2D([], [], color='white', marker='o', markersize=10, label=f'Tourist {i+1}: {visit_order_str}'))
+    
+    ax.legend(handles=visit_legend, loc='lower right', title='Visit Order', fontsize='small')
+
+    # Add the sightseeing legend back to the figure
+    ax.add_artist(sightseeing_legend)
 
     plt.show()
+
 
 # Dummy main function to call the visualizer
 def main():
