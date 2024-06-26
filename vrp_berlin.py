@@ -1,112 +1,51 @@
-import numpy as np
-import geopandas as gpd
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
-from ortools.constraint_solver import pywrapcp, routing_enums_pb2
+import geopandas as gpd
 import contextily as ctx
 
-# Define the depot and customer locations
-depot = (13.3694, 52.5259)  # Berlin Central Station coordinates
-customers = [
-    (13.4094, 52.5200),  # Alexanderplatz
-    (13.3777, 52.5163),  # Brandenburg Gate
-    (13.4386, 52.5194),  # East Side Gallery
-    (13.3904, 52.5107),  # Checkpoint Charlie
-    (13.3745, 52.5075),  # Potsdamer Platz
-    (13.3280, 52.5076),  # Kurfürstendamm
-    (13.4105, 52.5022),  # Mercedes-Benz Arena
-    (13.4540, 52.5128)   # Treptower Park
+# Coordinates and names for the Ritz Carlton Hotel in Berlin and sightseeing attractions
+depot = (13.3767, 52.5096)
+depot_name = "Ritz Carlton Hotel"
+
+sightseeing_attractions = [
+    (13.3777, 52.5163, 'Brandenburg Gate'),
+    (13.3830, 52.5186, 'Reichstag Building'),
+    (13.3916, 52.5325, 'Berlin Wall Memorial'),
+    (13.3976, 52.5319, 'Museum Island'),
+    (13.4009, 52.5192, 'Berlin Cathedral'),
+    (13.3904, 52.5076, 'Checkpoint Charlie'),
+    (13.4390, 52.5027, 'East Side Gallery'),
+    (13.4132, 52.5219, 'Alexanderplatz'),
+    (13.3752, 52.5096, 'Potsdamer Platz'),
+    (13.2837, 52.5186, 'Charlottenburg Palace')
 ]
 
-demands = [1, 2, 1, 2, 1, 2, 1, 2]
-vehicle_capacity = 10
-num_vehicles = 3
+# Number of vehicles
+num_vehicles = 1
 
-def create_data_model():
-    data = {}
-    data['locations'] = [depot] + customers
-    data['num_locations'] = len(data['locations'])
-    data['num_vehicles'] = num_vehicles
-    data['depot'] = 0
-    data['demands'] = [0] + demands
-    data['vehicle_capacities'] = [vehicle_capacity] * num_vehicles
-    return data
+# Data model
+data = {
+    'locations': [depot] + [loc[:2] for loc in sightseeing_attractions],
+    'num_locations': 1 + len(sightseeing_attractions),
+    'num_vehicles': num_vehicles,
+    'depot': 0
+}
 
-def compute_euclidean_distance_matrix(locations):
-    distances = np.zeros((len(locations), len(locations)))
-    for i, loc1 in enumerate(locations):
-        for j, loc2 in enumerate(locations):
-            if i != j:
-                distances[i][j] = np.linalg.norm(np.array(loc1) - np.array(loc2))
-    return distances
+# Visualization function
+def visualize_tourist_route(data, manager, routing, solution):
+    fig, ax = plt.subplots(figsize=(15, 10))
+    ax.set_title('Tourist Route in Berlin')
 
-def print_solution(data, manager, routing, solution):
-    total_distance = 0
-    for vehicle_id in range(data['num_vehicles']):
-        index = routing.Start(vehicle_id)
-        plan_output = 'Route for vehicle {}:\n'.format(vehicle_id)
-        route_distance = 0
-        while not routing.IsEnd(index):
-            plan_output += ' {} ->'.format(manager.IndexToNode(index))
-            previous_index = index
-            index = solution.Value(routing.NextVar(index))
-            route_distance += routing.GetArcCostForVehicle(previous_index, index, vehicle_id)
-        plan_output += ' {}\n'.format(manager.IndexToNode(index))
-        plan_output += 'Distance of the route: {}m\n'.format(route_distance)
-        print(plan_output)
-        total_distance += route_distance
-    print('Total distance of all routes: {}m'.format(total_distance))
+    # Plot depot
+    ax.plot(depot[0], depot[1], 'rs', markersize=10, label=depot_name)
 
-def main():
-    data = create_data_model()
-    manager = pywrapcp.RoutingIndexManager(data['num_locations'], data['num_vehicles'], data['depot'])
-    routing = pywrapcp.RoutingModel(manager)
-    distance_matrix = compute_euclidean_distance_matrix(data['locations'])
+    # Plot sightseeing attractions
+    for i, (x, y, name) in enumerate(sightseeing_attractions):
+        ax.plot(x, y, 'go', markersize=5, label=f'S{i+1}: {name}')
+        ax.text(x, y, f'S{i+1}', fontsize=12, ha='right')
 
-    def distance_callback(from_index, to_index):
-        from_node = manager.IndexToNode(from_index)
-        to_node = manager.IndexToNode(to_index)
-        return int(distance_matrix[from_node][to_node])
-
-    transit_callback_index = routing.RegisterTransitCallback(distance_callback)
-    routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
-
-    def demand_callback(from_index):
-        from_node = manager.IndexToNode(from_index)
-        return data['demands'][from_node]
-
-    demand_callback_index = routing.RegisterUnaryTransitCallback(demand_callback)
-    routing.AddDimensionWithVehicleCapacity(
-        demand_callback_index,
-        0,
-        data['vehicle_capacities'],
-        True,
-        'Capacity')
-
-    search_parameters = pywrapcp.DefaultRoutingSearchParameters()
-    search_parameters.first_solution_strategy = (
-        routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC)
-
-    solution = routing.SolveWithParameters(search_parameters)
-    if solution:
-        print_solution(data, manager, routing, solution)
-        return data, manager, routing, solution
-    else:
-        print('No solution found !')
-        return None, None, None, None
-
-def visualize_solution(data, manager, routing, solution):
-    fig, ax = plt.subplots(figsize=(10, 10))
-    ax.set_title('Vehicle Routing Problem Solution in Berlin')
-
-    # Plot depot and customers
-    ax.plot(depot[0], depot[1], 'rs', markersize=10, label='Depot')
-    for i, customer in enumerate(customers):
-        ax.plot(customer[0], customer[1], 'bo', markersize=5)
-        ax.text(customer[0], customer[1], f' {i+1}', fontsize=12)
-
-    # Plot routes
-    colors = ['r', 'g', 'b', 'y', 'c', 'm']
+    # Plot route
+    colors = ['b']
     for vehicle_id in range(num_vehicles):
         index = routing.Start(vehicle_id)
         while not routing.IsEnd(index):
@@ -128,12 +67,39 @@ def visualize_solution(data, manager, routing, solution):
     berlin_df = gpd.GeoDataFrame(geometry=gpd.points_from_xy([x[0] for x in data['locations']], [x[1] for x in data['locations']]))
     berlin_df = berlin_df.set_crs(epsg=4326)
     berlin_df = berlin_df.to_crs(epsg=3857)
-    ctx.add_basemap(ax, source=ctx.providers.Stamen.TonerLite, crs=berlin_df.crs.to_string())
+    ctx.add_basemap(ax, source=ctx.providers.OpenStreetMap.Mapnik, crs=berlin_df.crs.to_string(), zoom=12)
 
-    ax.legend()
+    # Create legend
+    handles, labels = ax.get_legend_handles_labels()
+    legend = ax.legend(handles, labels, loc='upper right', title='Sightseeing Locations')
+
     plt.show()
 
+# Dummy main function to call the visualizer
+def main():
+    from ortools.constraint_solver import pywrapcp
+    from ortools.constraint_solver import routing_enums_pb2
+
+    manager = pywrapcp.RoutingIndexManager(len(data['locations']), data['num_vehicles'], data['depot'])
+    routing = pywrapcp.RoutingModel(manager)
+
+    def distance_callback(from_index, to_index):
+        from_node = manager.IndexToNode(from_index)
+        to_node = manager.IndexToNode(to_index)
+        return int(((data['locations'][from_node][0] - data['locations'][to_node][0]) ** 2 +
+                    (data['locations'][from_node][1] - data['locations'][to_node][1]) ** 2) ** 0.5)
+
+    transit_callback_index = routing.RegisterTransitCallback(distance_callback)
+    routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
+
+    search_parameters = pywrapcp.DefaultRoutingSearchParameters()
+    search_parameters.first_solution_strategy = (routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC)
+
+    solution = routing.SolveWithParameters(search_parameters)
+    return data, manager, routing, solution
+
+# Run the VRP solution and visualize
 if __name__ == '__main__':
     data, manager, routing, solution = main()
     if solution:
-        visualize_solution(data, manager, routing, solution)
+        visualize_tourist_route(data, manager, routing, solution)
