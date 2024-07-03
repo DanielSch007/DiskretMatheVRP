@@ -11,21 +11,23 @@ class CVRP:
         self.num_vehicles = num_vehicles
         self.routes = [[depot, customer, depot] for customer in customers]
     
+    # auf Folie 22 erklärt
     def calculate_savings(self):
         savings = {}
-        for i in self.customers:
+        for i in self.customers: #einsparung vo jeder möglichen kante berechnen
             for j in self.customers:
                 if i != j:
                     savings[(i, j)] = self.distances[self.depot][i] + self.distances[self.depot][j] - self.distances[i][j]
         return sorted(savings.items(), key=lambda item: item[1], reverse=True)
     
+    # auf Folie 24 erklärt
     def merge_routes(self, savings):
         for (i, j), saving in savings:
             route_i = next((route for route in self.routes if i in route), None)
             route_j = next((route for route in self.routes if j in route), None)
             if route_i and route_j and route_i != route_j:
                 total_demand = sum(self.demands[node] for node in route_i[1:-1] + route_j[1:-1])
-                if total_demand <= self.capacity:
+                if total_demand <= self.capacity: # wenn Kapazität erlaubt neue Route
                     new_route = route_i[:-1] + route_j[1:]
                     self.routes.remove(route_i)
                     self.routes.remove(route_j)
@@ -36,6 +38,7 @@ class CVRP:
         self.merge_routes(savings)
         return self.routes[:self.num_vehicles]
 
+# Daten aus Overpass API (https://python-overpy.readthedocs.io/en/latest/)
 def get_osm_restaurants(area_name):
     overpass_url = "http://overpass-api.de/api/interpreter"
     overpass_query = f"""
