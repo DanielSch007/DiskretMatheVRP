@@ -1,5 +1,5 @@
-### Title: Vehicle Routing Problem
-# Authors: Leonid Hornscheidt, Daniel Scharf
+# Vehicle Routing Problem
+### Authors: Leonid Hornscheidt, Daniel Scharf
 
 
 ## CVRP_NB.ipnyb
