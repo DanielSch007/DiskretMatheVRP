@@ -1,3 +1,6 @@
+import requests
+import folium
+
 class CVRP:
     def __init__(self, depot, customers, distances, demands, capacity, num_vehicles):
         self.depot = depot
@@ -33,21 +36,62 @@ class CVRP:
         self.merge_routes(savings)
         return self.routes[:self.num_vehicles]
 
-# Beispielproblem
-depot = 0
-customers = [1, 2, 3, 4]
-distances = [
-    [0, 10, 15, 0, 10],
-    [10, 0, 30, 25, 30],
-    [15, 30, 0, 30, 20],
-    [20, 25, 30, 0, 15],
-    [10, 30, 20, 15, 0]
-]
-demands = [0, 5, 10, 5, 10]
-capacity = 10
-num_vehicles =2
+def get_osm_restaurants(area_name):
+    overpass_url = "http://overpass-api.de/api/interpreter"
+    overpass_query = f"""
+    [out:json];
+    area[name="{area_name}"]->.a;
+    node(area.a)[amenity=restaurant];
+    out center;
+    """
+    response = requests.get(overpass_url, params={'data': overpass_query})
+    data = response.json()
+    
+    restaurants = []
+    for element in data['elements']:
+        name = element.get('tags', {}).get('name', 'Unnamed')
+        lat = element['lat']
+        lon = element['lon']
+        restaurants.append({'name': name, 'location': (lat, lon)})
+    
+    return restaurants
 
-# CVRP lösen
+# Beispielproblem für Treptow-Köpenick
+depot = (52.41667, 13.56667)  # Depot-Koordinaten (Beispiel)
+customers = [(52.437, 13.568), (52.412, 13.565), (52.430, 13.572), (52.418, 13.563)]  # Kunden (Beispiel)
+distances = {
+    depot: {cust: 0 for cust in customers},
+    **{cust: {cust2: 0 for cust2 in customers} for cust in customers}
+}  # Distanzen (Beispiel, alle Distanzen sind 0)
+demands = {cust: 1 for cust in customers}  # Bedarfe (Beispiel, alle Bedarfe sind 1)
+capacity = 4  # Kapazität (Beispiel)
+num_vehicles = 2  # Anzahl Fahrzeuge (Beispiel)
+
+# VRP lösen
 cvrp = CVRP(depot, customers, distances, demands, capacity, num_vehicles)
 routes = cvrp.solve()
-print("Endgültige Routen:", routes)
+
+# Restaurants aus OpenStreetMap abrufen (Treptow-Köpenick)
+area_name = 'Treptow-Köpenick'
+restaurants = get_osm_restaurants(area_name)
+print("Restaurants:", restaurants)  # Debugging-Ausgabe
+
+# Karte erstellen und Depot, Restaurants, Routen einzeichnen
+map_center = depot  # Zentrum der Karte auf das Depot setzen
+map_osm = folium.Map(location=map_center, zoom_start=13)
+
+# Depot markieren
+folium.Marker(location=depot, popup='Depot', icon=folium.Icon(color='blue')).add_to(map_osm)
+
+# Restaurants einzeichnen
+for restaurant in restaurants:
+    folium.Marker(location=restaurant['location'], popup=restaurant['name']).add_to(map_osm)
+
+# Routen einzeichnen
+for route in routes:
+    folium.PolyLine(locations=route, color='red', weight=2.5, opacity=0.8).add_to(map_osm)
+
+# Karte als HTML-Datei speichern und im Browser öffnen
+map_osm.save('treptow_koepenick_vrp_map.html')
+import webbrowser
+webbrowser.open('treptow_koepenick_vrp_map.html')
